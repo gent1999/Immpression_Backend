@@ -15,6 +15,7 @@ import ImageViewModel from "../../models/image-views.js";
 // Importing the isUserAuthorized function from the utils directory
 import {
   isUserAuthorized,
+  isUserOptionallyAuthorized,
   validatePrice,
   validateImageLink,
 } from '../../utils/authUtils.js';
@@ -142,7 +143,7 @@ router.post('/image', isUserAuthorized, async (request, response) => {
 
 
 // Route to get all images from the database
-router.get('/all_images', isUserAuthorized, async (request, response) => {
+router.get('/all_images', isUserOptionallyAuthorized, async (request, response) => {
   try {
     const { page = 1, limit = 50 } = request.query;
     const query = {};

@@ -94,6 +94,57 @@ export const isUserAuthorized = async (req, res, next) => {
   }
 };
 
+// Optional authentication - allows guest access but validates token if provided
+export const isUserOptionallyAuthorized = async (req, res, next) => {
+  const token = getAuthToken(req.headers);
+
+  // No token provided - allow guest access
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  // Token provided - validate it
+  try {
+    const data = jwt.verify(token, JWT_SECRET);
+    if (typeof data !== 'string') {
+      const user = await UserModel.findById(data._id)
+        .select('+passwordChangedAt')
+        .catch((error) => {
+          console.error('Error finding user:', error);
+          return null;
+        });
+
+      if (!user) {
+        return res
+          .status(401)
+          .json({ success: false, error: 'User not found' });
+      }
+
+      // Check if the password was changed after the token was issued
+      const tokenIssuedAt = data.iat * 1000; // Convert to milliseconds
+      if (user.passwordChangedAt && user.passwordChangedAt > tokenIssuedAt) {
+        return res.status(401).json({
+          success: false,
+          error: 'Password has been changed. Please log in again.',
+        });
+      }
+
+      req.user = user;
+      req.token = token;
+      return next();
+    }
+    return res
+      .status(401)
+      .json({ success: false, error: 'Invalid token payload' });
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return res
+      .status(401)
+      .json({ success: false, error: 'Invalid or expired token' });
+  }
+};
+
 export const isAdminAuthorized = async (req, res, next) => {
   const token = getAuthToken(req.headers);
 
