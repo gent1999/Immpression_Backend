@@ -11,6 +11,7 @@ import multer from 'multer';
 import ImageModel from '../../models/images.js';
 import UserModel from '../../models/users.js';
 import ImageViewModel from "../../models/image-views.js";
+import Block from "../../models/block.js";
 
 // Importing the isUserAuthorized function from the utils directory
 import {
@@ -159,6 +160,15 @@ router.get('/all_images', isUserOptionallyAuthorized, async (request, response) 
       }
     }
 
+    // Filter out content from blocked users (Apple Guideline 1.2 compliance)
+    // If user is authenticated, exclude images from users they've blocked
+    if (request.user) {
+      const blockedUserIds = await Block.getBlockedUserIds(request.user._id);
+      if (blockedUserIds.length > 0) {
+        query.userId = { $nin: blockedUserIds };
+      }
+    }
+
     const skip = (page - 1) * limit;
 
     // Include soldStatus and everything else you already return
@@ -203,6 +213,10 @@ router.get('/image/liked-images', isUserAuthorized, async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // Get blocked user IDs to filter them out (Apple Guideline 1.2 compliance)
+    const blockedUserIds = await Block.getBlockedUserIds(userId);
+    const blockedUserIdStrings = blockedUserIds.map(id => id.toString());
+
     const user = await UserModel.findById(userId)
       .populate({
         path: 'likedImages',
@@ -215,7 +229,12 @@ router.get('/image/liked-images', isUserAuthorized, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    const formattedImages = user.likedImages.map((image) => ({
+    // Filter out images from blocked users
+    const filteredImages = user.likedImages.filter(
+      (image) => !blockedUserIdStrings.includes(image.userId?._id?.toString())
+    );
+
+    const formattedImages = filteredImages.map((image) => ({
       _id: image._id,
       name: image.name,
       imageLink: image.imageLink,

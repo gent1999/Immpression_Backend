@@ -28,6 +28,14 @@ import webDonationsRoutes from "./routes/webDonationsRoutes/webDonationsRoutes.j
 // Notifications routes
 import notificationRoutes from "./routes/notificationRoutes/notificationRoutes.js";
 
+// Report and Block routes (Apple Guideline 1.2 compliance)
+import reportRoutes from "./routes/reportRoutes/reportRoutes.js";
+import blockRoutes from "./routes/blockRoutes/blockRoutes.js";
+import adminReportRoutes from "./routes/admin-userAuthRoutes/admin-reportRoutes.js";
+
+// SLA Monitor service
+import { startSLAMonitor } from "./services/slaMonitor.js";
+
 // Import the MongoDB connection URL from config file
 import { MONGO_URL } from "./config/config.js";
 
@@ -146,8 +154,15 @@ app.use("/", orderRoutes);
 // Notifications at /notifications (avoids clobbering "/")
 app.use("/notifications", notificationRoutes);
 
+// Report and Block routes (Apple Guideline 1.2 compliance)
+app.use("/reports", reportRoutes);
+app.use("/blocks", blockRoutes);
+
 // Admin routes
 app.use("/api/admin", adminAuthRoutes);
+
+// Admin report management routes
+app.use("/api/admin/reports", adminReportRoutes);
 
 // Web donations (platform-only; includes /donations/create-checkout-session and /donations/webhook)
 app.use("/api/web", webDonationsRoutes);
@@ -157,7 +172,11 @@ const PORT = process.env.BACKEND_PORT || 4000;
 
 mongoose
   .connect(MONGO_URL)
-  .then(() => console.log("MongoDB connection successful"))
+  .then(() => {
+    console.log("MongoDB connection successful");
+    // Start SLA Monitor for report deadline tracking (Apple Guideline 1.2)
+    startSLAMonitor(15); // Check every 15 minutes
+  })
   .catch((error) => {
     console.error("Error connecting to MongoDB:", error);
     process.exit(1);

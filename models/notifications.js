@@ -12,12 +12,19 @@ export const NOTIFICATION_TYPE = {
   ORDER_PAID: "order_paid",
   ORDER_NEEDS_SHIPPING: "order_needs_shipping",
   ORDER_SHIPPED: "order_shipped",
-  ORDER_OUT_FOR_DELIVERY: "order_out_for_delivery", // ✅ add this (referenced in your poller)
+  ORDER_OUT_FOR_DELIVERY: "order_out_for_delivery",
   ORDER_DELIVERED: "order_delivered",
   PROFILE_VIEW: "profile_view",
   LIKE_RECEIVED: "like_received",
   IMAGE_APPROVED: "image_approved",
   IMAGE_REJECTED: "image_rejected",
+  // Moderation notifications (Apple Guideline 1.2 compliance)
+  REPORT_RECEIVED: "report_received",           // Admin: new report submitted
+  REPORT_RESOLVED: "report_resolved",           // Reporter: their report was addressed
+  MODERATION_WARNING: "moderation_warning",     // User: warning issued
+  MODERATION_SUSPENSION: "moderation_suspension", // User: account suspended
+  MODERATION_BAN: "moderation_ban",             // User: account banned
+  CONTENT_REMOVED: "content_removed",           // User: content removed by moderation
 };
 
 const TYPE_ENUM = {
@@ -51,6 +58,7 @@ const NotificationSchema = new Schema(
     // Linkage for deep-linking
     orderId: { type: Types.ObjectId, ref: "Order" },
     imageId: { type: Types.ObjectId, ref: "Image" },
+    reportId: { type: Types.ObjectId, ref: "Report" },
 
     // Quick-render payload
     data: {
@@ -169,6 +177,19 @@ function notificationEmailMeta(doc) {
       return { subject: "Your image was approved", message: doc.message };
     case NOTIFICATION_TYPE.IMAGE_REJECTED:
       return { subject: "Your image was rejected", message: doc.message };
+    // Moderation notifications
+    case NOTIFICATION_TYPE.REPORT_RECEIVED:
+      return { subject: "New report requires review", message: doc.message };
+    case NOTIFICATION_TYPE.REPORT_RESOLVED:
+      return { subject: "Your report has been reviewed", message: doc.message };
+    case NOTIFICATION_TYPE.MODERATION_WARNING:
+      return { subject: "Important: Account warning", message: doc.message };
+    case NOTIFICATION_TYPE.MODERATION_SUSPENSION:
+      return { subject: "Account suspended", message: doc.message };
+    case NOTIFICATION_TYPE.MODERATION_BAN:
+      return { subject: "Account terminated", message: doc.message };
+    case NOTIFICATION_TYPE.CONTENT_REMOVED:
+      return { subject: "Content removed", message: doc.message };
     default:
       return { subject: doc.title || "Notification", message: doc.message };
   }

@@ -70,6 +70,21 @@ const UserSchema = new Schema(
 
     resetPasswordToken: { type: String, select: false },
     resetPasswordExpires: { type: Date, select: false },
+
+    // Moderation fields (Apple Guideline 1.2 compliance)
+    moderationStatus: {
+      type: String,
+      enum: {
+        values: ['active', 'warned', 'suspended', 'banned'],
+        message: '{VALUE} is not a valid moderation status',
+      },
+      default: 'active',
+      index: true,
+    },
+    warningCount: { type: Number, default: 0 },
+    suspendedUntil: { type: Date, default: null },
+    banReason: { type: String, default: null },
+    lastModerationAction: { type: Date, default: null },
   },
   { timestamps: true, versionKey: '__v' }
 );
