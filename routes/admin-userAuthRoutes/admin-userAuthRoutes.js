@@ -10,6 +10,7 @@ import ImageModel from "../../models/images.js";
 import cloudinary from "cloudinary";
 import Notification, { NOTIFICATION_TYPE } from "../../models/notifications.js";
 import sendEmail from "../../services/email.js"; // your nodemailer wrapper
+import OrderModel from "../../models/orders.js";
 
 
 const router = express.Router();
@@ -541,5 +542,79 @@ router.delete("/user/:id", isAdminAuthorized, async (req, res) => {
     }
 });
 
+
+// ✅ Admin-only route to get aggregated analytics for the dashboard
+router.get("/analytics", isAdminAuthorized, async (req, res) => {
+    try {
+        // --- Users ---
+        const totalUsers = await UserModel.countDocuments();
+        const stripeLinked = await UserModel.countDocuments({ stripeAccountId: { $exists: true, $ne: null, $ne: "" } });
+        const artists = await UserModel.countDocuments({ accountType: "artist" });
+        const artLovers = await UserModel.countDocuments({ accountType: "art-lover" });
+        const recentUsers = await UserModel.find({}, "name email createdAt accountType profilePictureLink")
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+
+        // --- Images ---
+        const totalImages = await ImageModel.countDocuments();
+        const pendingImages = await ImageModel.countDocuments({
+            $or: [{ stage: "review" }, { stage: { $exists: false } }],
+        });
+        const approvedImages = await ImageModel.countDocuments({ stage: "approved" });
+        const rejectedImages = await ImageModel.countDocuments({ stage: "rejected" });
+
+        // --- Orders ---
+        const totalOrders = await OrderModel.countDocuments();
+        const paidOrders = await OrderModel.countDocuments({ status: "paid" });
+        const pendingOrders = await OrderModel.countDocuments({ status: "pending" });
+        const failedOrders = await OrderModel.countDocuments({ status: "failed" });
+        const refundedOrders = await OrderModel.countDocuments({ status: "refunded" });
+
+        // Revenue: sum totalAmount (in cents) for paid orders
+        const revenueAgg = await OrderModel.aggregate([
+            { $match: { status: "paid" } },
+            { $group: { _id: null, total: { $sum: "$totalAmount" } } },
+        ]);
+        const totalRevenueCents = revenueAgg.length > 0 ? revenueAgg[0].total : 0;
+
+        const recentOrders = await OrderModel.find({}, "artName artistName totalAmount status createdAt")
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                users: {
+                    total: totalUsers,
+                    stripeLinked,
+                    stripeNotLinked: totalUsers - stripeLinked,
+                    artists,
+                    artLovers,
+                    recent: recentUsers,
+                },
+                images: {
+                    total: totalImages,
+                    pending: pendingImages,
+                    approved: approvedImages,
+                    rejected: rejectedImages,
+                },
+                orders: {
+                    total: totalOrders,
+                    paid: paidOrders,
+                    pending: pendingOrders,
+                    failed: failedOrders,
+                    refunded: refundedOrders,
+                    totalRevenueCents,
+                    recent: recentOrders,
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching analytics:", error);
+        return res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+});
 
 export default router;
