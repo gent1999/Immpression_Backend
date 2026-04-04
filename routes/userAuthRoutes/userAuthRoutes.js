@@ -40,6 +40,7 @@ import { OAuth2Client } from 'google-auth-library';
 // Initialize Google OAuth client after other configurations
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 import OTP from '../../models/otp.js';
+import ProfileViewModel from '../../models/profile-views.js';
 import { generateOtpEmailTemplate, generatePasswordResetEmailTemplate } from '../../utils/email.js';
 import sendEmail from '../../services/email.js';
 
@@ -730,6 +731,39 @@ router.patch('/profile/increment-views/:id', async (req, res) => {
       success: false,
       error: 'Internal Server Error',
     });
+  }
+});
+
+router.post('/profile/:id/unique-views', isUserAuthorized, async (req, res) => {
+  try {
+    const viewerId = req.user._id;
+    const profileId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(profileId)) {
+      return res.status(400).json({ success: false, error: 'Invalid profile ID' });
+    }
+
+    // Don't count views on your own profile
+    if (viewerId.toString() === profileId.toString()) {
+      return res.json({ success: true, selfView: true });
+    }
+
+    const alreadyViewed = await ProfileViewModel.findOne({ viewerId, profileId });
+    if (alreadyViewed) {
+      return res.json({ success: true, viewed: true });
+    }
+
+    await ProfileViewModel.create({ viewerId, profileId });
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      profileId,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+
+    res.json({ success: true, viewed: false, recorded: true, views: updatedUser?.views });
+  } catch (error) {
+    console.error('Error recording profile view:', error);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
   }
 });
 
