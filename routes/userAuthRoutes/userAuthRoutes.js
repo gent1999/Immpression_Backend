@@ -40,7 +40,7 @@ import { OAuth2Client } from 'google-auth-library';
 // Initialize Google OAuth client after other configurations
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 import OTP from '../../models/otp.js';
-import { generateOtpEmailTemplate } from '../../utils/email.js';
+import { generateOtpEmailTemplate, generatePasswordResetEmailTemplate } from '../../utils/email.js';
 import sendEmail from '../../services/email.js';
 
 cloudinary.v2.config({
@@ -991,42 +991,75 @@ router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email is required',
-      });
+      return res.status(400).json({ success: false, error: 'Email is required' });
     }
 
     const user = await UserModel.findOne({ email });
 
+    // Always respond success to avoid leaking which emails exist
     if (!user) {
       return res.status(200).json({
         success: true,
-        message:
-          'If an account with that email exists, a password reset link has been sent',
+        message: 'If an account with that email exists, a reset code has been sent',
       });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = Date.now() + 3600000; // 1 hour from now
+    // Generate 4-digit OTP and store in OTP collection
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const saltRounds = 10;
+    const hashedOtp = await bcrypt.hash(otp, saltRounds);
 
-    user.resetPasswordToken = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
-    user.resetPasswordExpires = resetTokenExpires;
-    await user.save();
+    await OTP.findOneAndUpdate(
+      { email },
+      { codeHash: hashedOtp, createdAt: new Date(), verified: false },
+      { upsert: true }
+    );
 
-    // Send reset token to user email.
+    const html = generatePasswordResetEmailTemplate(otp, user.name || email);
+    await sendEmail(email, 'Password Reset Code', html);
 
     return res.status(200).json({
       success: true,
-      message:
-        'If an account with that email exists, a password reset token has been sent',
+      message: 'If an account with that email exists, a reset code has been sent',
     });
   } catch (error) {
-    console.error('Error verifying password reset:', error);
+    console.error('forgot-password error:', error);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Email, OTP, and new password are required' });
+    }
+
+    const otpRecord = await OTP.findOne({ email });
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired reset code' });
+    }
+
+    const isOtpCorrect = await bcrypt.compare(otp, otpRecord.codeHash);
+    if (!isOtpCorrect) {
+      return res.status(400).json({ success: false, error: 'Invalid reset code' });
+    }
+
+    const user = await UserModel.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const saltRounds = 10;
+    user.password = await bcrypt.hash(newPassword, saltRounds);
+    await user.save();
+
+    await OTP.deleteOne({ email });
+
+    return res.status(200).json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('reset-password error:', error);
     res.status(500).json({ success: false, error: 'Internal Server Error' });
   }
 });
