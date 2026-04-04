@@ -1,6 +1,7 @@
 // Import the Express framework
 import express from 'express';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
 // Import bcryptjs for password hashing and comparison
 // import bcrypt from "bcryptjs";
