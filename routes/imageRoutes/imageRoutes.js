@@ -726,14 +726,19 @@ router.post('/image/:id/unique-views', isUserAuthorized, async (req, res) => {
     const alreadyViewed = await ImageViewModel.findOne({ userId, imageId });
 
     if (alreadyViewed) {
-      return res.json({ success: true, viewed: true });
+      const image = await ImageModel.findById(imageId).select('views');
+      return res.json({ success: true, viewed: true, views: image?.views ?? 0 });
     }
 
     // Record the view
     await ImageViewModel.create({ userId, imageId });
-    await ImageModel.findByIdAndUpdate(imageId, { $inc: { views: 1 } });
+    const updated = await ImageModel.findByIdAndUpdate(
+      imageId,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
 
-    res.json({ success: true, viewed: false, recorded: true });
+    res.json({ success: true, viewed: false, recorded: true, views: updated?.views ?? 0 });
   } catch (error) {
     console.error('Error checking/recording image view:', error);
     res.status(500).json({ success: false, error: 'Internal Server Error' });
