@@ -717,6 +717,7 @@ router.post('/image/:id/unique-views', isUserAuthorized, async (req, res) => {
   try {
     const userId = req.user._id;
     const imageId = req.params.id;
+    console.log(`[unique-views] userId=${userId} imageId=${imageId}`);
     
     if (!mongoose.Types.ObjectId.isValid(imageId)) {
       return res.status(400).json({ success: false, error: 'Invalid image ID' });
