@@ -443,7 +443,7 @@ router.get('/images', isUserAuthorized, async (req, res) => {
     }
 
     const images = await ImageModel.find(query)
-      .select('_id userId name imageLink stage soldStatus views price category createdAt dimensions weight isSigned isFramed');
+      .select('_id userId name imageLink stage soldStatus views likes price category createdAt dimensions weight isSigned isFramed');
 
     const withFlags = images.map((img) => {
       const o = img.toObject();
