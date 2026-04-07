@@ -747,5 +747,82 @@ router.post('/image/:id/unique-views', isUserAuthorized, async (req, res) => {
 });
 
 
+// ─── Public Marketplace Routes ────────────────────────────────────────────────
+
+// GET /marketplace — all approved, unsold artworks (public, no auth required)
+router.get('/marketplace', async (req, res) => {
+  try {
+    const { page = 1, limit = 48, category, sort = 'newest' } = req.query;
+
+    const query = { stage: 'approved', soldStatus: 'unsold' };
+
+    if (category) {
+      if (!IMAGE_CATEGORY.includes(category)) {
+        return res.status(400).json({ success: false, error: 'Invalid category' });
+      }
+      query.category = category;
+    }
+
+    const sortMap = {
+      newest: { createdAt: -1 },
+      oldest: { createdAt: 1 },
+      price_asc: { price: 1 },
+      price_desc: { price: -1 },
+    };
+    const sortOrder = sortMap[sort] || sortMap.newest;
+
+    const skip = (page - 1) * limit;
+
+    const [images, totalImages] = await Promise.all([
+      ImageModel.find(query)
+        .sort(sortOrder)
+        .limit(Number(limit))
+        .skip(skip)
+        .select('_id userId artistName name description price imageLink category createdAt dimensions weight isSigned isFramed views'),
+      ImageModel.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      images,
+      totalImages,
+      totalPages: Math.ceil(totalImages / limit),
+      currentPage: Number(page),
+    });
+  } catch (error) {
+    console.error('Error fetching marketplace images:', error);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
+});
+
+// GET /marketplace/:id — single approved artwork by ID (public, no auth required)
+router.get('/marketplace/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, error: 'Invalid artwork ID' });
+    }
+
+    const image = await ImageModel.findOne({ _id: id, stage: 'approved' })
+      .select('_id userId artistName name description price imageLink category createdAt dimensions weight isSigned isFramed views soldStatus');
+
+    if (!image) {
+      return res.status(404).json({ success: false, error: 'Artwork not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      image: {
+        ...image.toObject(),
+        isSold: String(image.soldStatus || '').toLowerCase() === 'sold',
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching marketplace artwork:', error);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
+});
+
 // Exporting the router as the default export
 export default router;
