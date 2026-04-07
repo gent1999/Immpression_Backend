@@ -32,6 +32,7 @@ import notificationRoutes from "./routes/notificationRoutes/notificationRoutes.j
 import reportRoutes from "./routes/reportRoutes/reportRoutes.js";
 import blockRoutes from "./routes/blockRoutes/blockRoutes.js";
 import adminReportRoutes from "./routes/admin-userAuthRoutes/admin-reportRoutes.js";
+import adminAnalyticsRoutes from "./routes/admin-userAuthRoutes/admin-analyticsRoutes.js";
 
 // Public domain art (proxy layer — no DB interaction)
 import publicArtRoutes from "./routes/publicArtRoutes/publicArtRoutes.js";
@@ -169,6 +170,7 @@ app.use("/api/admin", adminAuthRoutes);
 
 // Admin report management routes
 app.use("/api/admin/reports", adminReportRoutes);
+app.use("/api/admin/analytics/web", adminAnalyticsRoutes);
 
 // Web donations (platform-only; includes /donations/create-checkout-session and /donations/webhook)
 app.use("/api/web", webDonationsRoutes);

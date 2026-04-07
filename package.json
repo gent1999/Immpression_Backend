@@ -14,6 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "@easypost/api": "^8.2.0",
+    "@google-analytics/data": "^5.2.1",
     "@playwright/test": "^1.49.0",
     "argon2": "^0.41.1",
     "axios": "^1.7.8",
