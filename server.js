@@ -40,6 +40,9 @@ import publicArtRoutes from "./routes/publicArtRoutes/publicArtRoutes.js";
 // Contact form
 import contactRoutes from "./routes/contactRoutes/contactRoutes.js";
 
+// Sitemap
+import sitemapRoutes from "./routes/sitemapRoutes/sitemapRoutes.js";
+
 // SLA Monitor service
 import { startSLAMonitor } from "./services/slaMonitor.js";
 
@@ -180,6 +183,9 @@ app.use("/public-art", publicArtRoutes);
 
 // Contact form
 app.use("/", contactRoutes);
+
+// Sitemap
+app.use("/", sitemapRoutes);
 
 // ----- Database connection -----
 const PORT = process.env.BACKEND_PORT || 4000;
