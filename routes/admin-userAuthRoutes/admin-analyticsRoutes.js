@@ -15,6 +15,12 @@ async function getAccessToken() {
   if (!raw) throw new Error("GA4_SERVICE_ACCOUNT_JSON not set");
 
   const credentials = JSON.parse(raw);
+
+  // Vercel sometimes escapes \n as \\n in env vars — fix the private key
+  if (credentials.private_key) {
+    credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
+  }
+
   const auth = new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/analytics.readonly"],
