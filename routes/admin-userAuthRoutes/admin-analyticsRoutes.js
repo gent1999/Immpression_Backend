@@ -1,38 +1,58 @@
 // routes/admin-userAuthRoutes/admin-analyticsRoutes.js
-// Fetches GA4 data via the Google Analytics Data API (service account auth).
-//
+// Uses GA4 Data API via REST (not gRPC) — compatible with Vercel serverless.
 // Required env vars:
-//   GA4_PROPERTY_ID          — numeric GA4 property ID (e.g. "376543210")
-//   GA4_SERVICE_ACCOUNT_JSON — full JSON string of your service account key file
+//   GA4_PROPERTY_ID          — numeric GA4 property ID (e.g. "531614205")
+//   GA4_SERVICE_ACCOUNT_JSON — full JSON string of service account key file
 
 import express from "express";
-import { BetaAnalyticsDataClient } from "@google-analytics/data";
+import { GoogleAuth } from "google-auth-library";
 import { isAdminAuthorized } from "../../utils/authUtils.js";
 
 const router = express.Router();
 
-function getClient() {
+async function getAccessToken() {
   const raw = process.env.GA4_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error("GA4_SERVICE_ACCOUNT_JSON not set");
-  return new BetaAnalyticsDataClient({ credentials: JSON.parse(raw) });
+
+  const credentials = JSON.parse(raw);
+  const auth = new GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/analytics.readonly"],
+  });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  return token.token;
 }
 
-const PROPERTY = () => {
-  const id = process.env.GA4_PROPERTY_ID;
-  if (!id) throw new Error("GA4_PROPERTY_ID not set");
-  return `properties/${id}`;
-};
+async function runReport(propertyId, accessToken, body) {
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || `GA4 API error ${res.status}`);
+  }
+  return res.json();
+}
 
-// GET /api/admin/analytics
+// GET /api/admin/analytics/web
 router.get("/", isAdminAuthorized, async (_req, res) => {
   try {
-    const client = getClient();
-    const property = PROPERTY();
+    const propertyId = process.env.GA4_PROPERTY_ID;
+    if (!propertyId) {
+      return res.status(503).json({ success: false, error: "GA4_PROPERTY_ID not set" });
+    }
+
+    const token = await getAccessToken();
 
     const [summary30, summary7, dailyRes, topPagesRes, sourcesRes] = await Promise.all([
-      // ── 30-day summary ──────────────────────────────────────────────────
-      client.runReport({
-        property,
+      runReport(propertyId, token, {
         dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
         metrics: [
           { name: "activeUsers" },
@@ -42,9 +62,7 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
           { name: "averageSessionDuration" },
         ],
       }),
-      // ── 7-day summary ───────────────────────────────────────────────────
-      client.runReport({
-        property,
+      runReport(propertyId, token, {
         dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
         metrics: [
           { name: "activeUsers" },
@@ -52,26 +70,20 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
           { name: "screenPageViews" },
         ],
       }),
-      // ── Daily chart data (30 days) ──────────────────────────────────────
-      client.runReport({
-        property,
+      runReport(propertyId, token, {
         dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
         dimensions: [{ name: "date" }],
         metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
         orderBys: [{ dimension: { dimensionName: "date" } }],
       }),
-      // ── Top 10 pages ────────────────────────────────────────────────────
-      client.runReport({
-        property,
+      runReport(propertyId, token, {
         dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
         dimensions: [{ name: "pagePath" }, { name: "pageTitle" }],
         metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }],
         orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
         limit: 10,
       }),
-      // ── Traffic sources ─────────────────────────────────────────────────
-      client.runReport({
-        property,
+      runReport(propertyId, token, {
         dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
         dimensions: [{ name: "sessionDefaultChannelGrouping" }],
         metrics: [{ name: "sessions" }, { name: "activeUsers" }],
@@ -80,10 +92,10 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
       }),
     ]);
 
-    const mv30 = summary30[0].rows?.[0]?.metricValues ?? [];
-    const mv7  = summary7[0].rows?.[0]?.metricValues ?? [];
+    const mv30 = summary30.rows?.[0]?.metricValues ?? [];
+    const mv7  = summary7.rows?.[0]?.metricValues ?? [];
 
-    const daily = (dailyRes[0].rows ?? []).map((row) => {
+    const daily = (dailyRes.rows ?? []).map((row) => {
       const raw = row.dimensionValues[0].value; // "20250401"
       return {
         date: `${raw.slice(4, 6)}/${raw.slice(6, 8)}`,
@@ -92,14 +104,14 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
       };
     });
 
-    const topPages = (topPagesRes[0].rows ?? []).map((row) => ({
+    const topPages = (topPagesRes.rows ?? []).map((row) => ({
       path: row.dimensionValues[0].value,
       title: row.dimensionValues[1].value,
       pageViews: parseInt(row.metricValues[0].value || 0),
       users: parseInt(row.metricValues[1].value || 0),
     }));
 
-    const sources = (sourcesRes[0].rows ?? []).map((row) => ({
+    const sources = (sourcesRes.rows ?? []).map((row) => ({
       channel: row.dimensionValues[0].value,
       sessions: parseInt(row.metricValues[0].value || 0),
       users: parseInt(row.metricValues[1].value || 0),
@@ -132,11 +144,8 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
       },
     });
   } catch (err) {
-    console.error("GA4 analytics error:", err.message, err.code, err.details);
-    if (err.message?.includes("not set")) {
-      return res.status(503).json({ success: false, error: "Analytics not configured — set GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON in env." });
-    }
-    return res.status(500).json({ success: false, error: err.message || "Failed to fetch analytics data.", code: err.code, details: err.details });
+    console.error("GA4 analytics error:", err.message);
+    return res.status(500).json({ success: false, error: err.message || "Failed to fetch analytics data." });
   }
 });
 
