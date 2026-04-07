@@ -36,6 +36,9 @@ import adminReportRoutes from "./routes/admin-userAuthRoutes/admin-reportRoutes.
 // Public domain art (proxy layer — no DB interaction)
 import publicArtRoutes from "./routes/publicArtRoutes/publicArtRoutes.js";
 
+// Contact form
+import contactRoutes from "./routes/contactRoutes/contactRoutes.js";
+
 // SLA Monitor service
 import { startSLAMonitor } from "./services/slaMonitor.js";
 
@@ -172,6 +175,9 @@ app.use("/api/web", webDonationsRoutes);
 
 // Public domain art (proxy — no DB)
 app.use("/public-art", publicArtRoutes);
+
+// Contact form
+app.use("/", contactRoutes);
 
 // ----- Database connection -----
 const PORT = process.env.BACKEND_PORT || 4000;
