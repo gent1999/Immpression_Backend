@@ -132,11 +132,11 @@ router.get("/", isAdminAuthorized, async (_req, res) => {
       },
     });
   } catch (err) {
-    console.error("GA4 analytics error:", err.message);
-    if (err.message.includes("not set")) {
+    console.error("GA4 analytics error:", err.message, err.code, err.details);
+    if (err.message?.includes("not set")) {
       return res.status(503).json({ success: false, error: "Analytics not configured — set GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON in env." });
     }
-    return res.status(500).json({ success: false, error: "Failed to fetch analytics data." });
+    return res.status(500).json({ success: false, error: err.message || "Failed to fetch analytics data.", code: err.code, details: err.details });
   }
 });
 
