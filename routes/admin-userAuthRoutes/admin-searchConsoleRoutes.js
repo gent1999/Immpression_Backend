@@ -1,6 +1,6 @@
 import express from "express";
 import { GoogleAuth } from "google-auth-library";
-import { verifyAdminToken } from "./admin-userAuthRoutes.js";
+import { isAdminAuthorized } from "../../utils/authUtils.js";
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ async function querySearchAnalytics(token, body) {
   return res.json();
 }
 
-router.get("/", verifyAdminToken, async (req, res) => {
+router.get("/", isAdminAuthorized, async (req, res) => {
   try {
     const token = await getAccessToken();
 
@@ -106,8 +106,9 @@ router.get("/", verifyAdminToken, async (req, res) => {
       position: Math.round(r.position * 10) / 10,
     }));
 
-    // Top pages — strip domain for display
+    // Top pages — strip domain for display, keep full URL as key
     const topPages = (pagesData.rows || []).map((r) => ({
+      fullUrl: r.keys[0],
       page: r.keys[0].replace("https://www.immpression.art", "") || "/",
       clicks: r.clicks,
       impressions: r.impressions,
