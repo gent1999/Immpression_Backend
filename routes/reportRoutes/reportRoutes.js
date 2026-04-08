@@ -9,6 +9,7 @@ import Report, {
 import ImageModel from "../../models/images.js";
 import UserModel from "../../models/users.js";
 import { isUserAuthorized } from "../../utils/authUtils.js";
+import { notifyAdmins } from "../../services/adminNotify.js";
 
 const router = express.Router();
 
@@ -79,6 +80,12 @@ router.post("/image/:imageId", isUserAuthorized, async (req, res) => {
         userName: image.userId.name,
         userEmail: image.userId.email,
       },
+    });
+
+    notifyAdmins("newReport", {
+      targetType: "image",
+      reason,
+      reporterEmail: image.userId.email,
     });
 
     res.status(201).json({
@@ -162,6 +169,12 @@ router.post("/user/:userId", isUserAuthorized, async (req, res) => {
         userName: targetUser.name,
         userEmail: targetUser.email,
       },
+    });
+
+    notifyAdmins("newReport", {
+      targetType: "user",
+      reason,
+      reporterEmail: req.user?.email || "",
     });
 
     res.status(201).json({

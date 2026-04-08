@@ -20,6 +20,7 @@ import {
   validatePrice,
   validateImageLink,
 } from '../../utils/authUtils.js';
+import { notifyAdmins } from '../../services/adminNotify.js';
 
 // Create a router instance with the router configuration
 const router = express.Router();
@@ -125,6 +126,14 @@ router.post('/image', isUserAuthorized, async (request, response) => {
       weight: weightNum,    // <--- NEW
       isSigned: Boolean(isSigned),
       isFramed: Boolean(isFramed),
+    });
+
+    // Notify admins of new pending artwork (fire-and-forget)
+    notifyAdmins("newPendingArtwork", {
+      name: newImage.name,
+      artistName: newImage.artistName,
+      price: newImage.price,
+      category: newImage.category,
     });
 
     return response.status(200).json({

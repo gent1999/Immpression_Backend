@@ -43,6 +43,7 @@ import OTP from '../../models/otp.js';
 import ProfileViewModel from '../../models/profile-views.js';
 import { generateOtpEmailTemplate, generatePasswordResetEmailTemplate } from '../../utils/email.js';
 import sendEmail from '../../services/email.js';
+import { notifyAdmins } from '../../services/adminNotify.js';
 
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD,
@@ -193,6 +194,9 @@ router.post('/signup', async (request, response) => {
     existingUser.name = name;
 
     await existingUser.save();
+
+    // Notify admins of new signup (fire-and-forget)
+    notifyAdmins("newSignup", { name: existingUser.name, email: existingUser.email });
 
     // Return success response
     return response.status(201).json({
